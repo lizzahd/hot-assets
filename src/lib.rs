@@ -49,7 +49,9 @@ impl AssetManager {
 
         set_camera(&ass_cam);
 
-        draw_text(text, 0., 0., 16., color);
+        clear_background(color);
+
+        draw_text(text, 0., 0., 16., WHITE);
 
         if let Some(cam) = camera {
             set_camera(cam);
