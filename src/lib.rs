@@ -2,6 +2,7 @@ use glob::glob;
 use std::collections::HashMap;
 use macroquad::prelude::*;
 use macroquad::audio::{Sound, load_sound};
+use futures::future::join_all;
 
 #[derive(Debug)]
 pub struct AssetManager {
@@ -38,6 +39,64 @@ impl AssetManager {
             }
         }
 
+        manager
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            images: HashMap::new(),
+            sounds: HashMap::new(),
+        }
+    }
+
+    pub async fn load_image(&self, path: std::path::PathBuf) -> (String, Texture2D) {
+        let image = load_texture(path.to_str().unwrap()).await.unwrap();
+        image.set_filter(FilterMode::Nearest);
+        (path.file_stem().unwrap().to_str().unwrap().to_string(), image)
+    }
+
+    pub async fn load_sound(&self, path: std::path::PathBuf) -> (String, Sound) {
+        let sound = load_sound(path.to_str().unwrap()).await.unwrap();
+        (path.file_stem().unwrap().to_str().unwrap().to_string(), sound)
+    }
+
+    pub async fn load_async(&mut self) {
+        let mut image_futures = Vec::new();
+
+        for entry in glob("assets/*.png").expect("Failed to load images") {
+            match entry {
+                Ok(path) => {
+                    let future = self.load_image(path);
+                    image_futures.push(future);
+                },
+                Err(e) => println!("{:?}", e),
+            }
+        }
+
+        for (name, image) in join_all(image_futures).await {
+            self.images.insert(name, image);
+        }
+
+        let mut sound_futures = Vec::new();
+
+        for entry in glob("assets/sounds/*.wav").expect("Failed to load images") {
+            match entry {
+                Ok(path) => {
+                    let future = self.load_sound(path);
+                    sound_futures.push(future);
+                },
+                Err(e) => println!("{:?}", e),
+            }
+        }
+
+        for (name, sound) in join_all(sound_futures).await {
+            self.sounds.insert(name, sound);
+        }
+    }
+
+    pub async fn new_async() -> Self {
+        let mut manager = Self::empty();
+        manager.load_async().await;
         manager
     }
 
