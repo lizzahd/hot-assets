@@ -6,36 +6,54 @@ use futures::future::join_all;
 
 #[derive(Debug)]
 pub struct AssetManager {
-    pub images: HashMap<String, Texture2D>,
-    pub sounds: HashMap<String, Sound>
+    pub images: HashMap<String, Image>,
+    pub textures: HashMap<String, Texture2D>,
+    pub sounds: HashMap<String, Sound>,
 }
 
 impl AssetManager {
-    pub async fn new() -> Self {
+    pub async fn new(textures_folder: Option<&str>, images_folder: Option<&str>, sounds_folder: Option<&str>) -> Self {
         let mut manager = Self {
             images: HashMap::new(),
+            textures: HashMap::new(),
             sounds: HashMap::new(),
         };
 
-        for entry in glob("assets/*.png").expect("Failed to load images") {
-            match entry {
-                Ok(path) => {
-                    let tex = load_texture(path.to_str().unwrap()).await.unwrap();
-                    tex.set_filter(FilterMode::Nearest);
-                    manager.images.insert(path.file_stem().unwrap().to_str().unwrap().to_string(), tex);
-                },
-                Err(e) => println!("{:?}", e),
+        if let Some(dir) = textures_folder {
+            for entry in glob(&format!("{}/*.png", dir)).expect("Failed to load textures") {
+                match entry {
+                    Ok(path) => {
+                        let tex = load_texture(path.to_str().unwrap()).await.unwrap();
+                        tex.set_filter(FilterMode::Nearest);
+                        manager.textures.insert(path.file_stem().unwrap().to_str().unwrap().to_string(), tex);
+                    },
+                    Err(e) => println!("{:?}", e),
+                }
             }
         }
 
-        for entry in glob("assets/sounds/*.wav").expect("Failed to load images") {
-            match entry {
-                Ok(path) => {
-                    let sound = load_sound(path.to_str().unwrap()).await.unwrap();
-                    //tex.set_filter(FilterMode::Nearest);
-                    manager.sounds.insert(path.file_stem().unwrap().to_str().unwrap().to_string(), sound);
-                },
-                Err(e) => println!("{:?}", e),
+        if let Some(dir) = images_folder {
+            for entry in glob(&format!("{}/*.png", dir)).expect("Failed to load textures") {
+                match entry {
+                    Ok(path) => {
+                        let tex = load_image(path.to_str().unwrap()).await.unwrap();
+                        // tex.set_filter(FilterMode::Nearest);
+                        manager.images.insert(path.file_stem().unwrap().to_str().unwrap().to_string(), tex);
+                    },
+                    Err(e) => println!("{:?}", e),
+                }
+            }
+        }
+
+        if let Some(dir) = sounds_folder {
+            for entry in glob(&format!("{}/*.wav", dir)).expect("Failed to load textures") {
+                match entry {
+                    Ok(path) => {
+                        let sound = load_sound(path.to_str().unwrap()).await.unwrap();
+                        manager.sounds.insert(path.file_stem().unwrap().to_str().unwrap().to_string(), sound);
+                    },
+                    Err(e) => println!("{:?}", e),
+                }
             }
         }
 
@@ -45,13 +63,19 @@ impl AssetManager {
     pub fn empty() -> Self {
         Self {
             images: HashMap::new(),
+            textures: HashMap::new(),
             sounds: HashMap::new(),
         }
     }
 
-    pub async fn load_image(&self, path: std::path::PathBuf) -> (String, Texture2D) {
-        let image = load_texture(path.to_str().unwrap()).await.unwrap();
-        image.set_filter(FilterMode::Nearest);
+    pub async fn load_texture(&self, path: std::path::PathBuf) -> (String, Texture2D) {
+        let tex = load_texture(path.to_str().unwrap()).await.unwrap();
+        tex.set_filter(FilterMode::Nearest);
+        (path.file_stem().unwrap().to_str().unwrap().to_string(), tex)
+    }
+
+    pub async fn load_image(&self, path: std::path::PathBuf) -> (String, Image) {
+        let image = load_image(path.to_str().unwrap()).await.unwrap();
         (path.file_stem().unwrap().to_str().unwrap().to_string(), image)
     }
 
@@ -61,12 +85,13 @@ impl AssetManager {
     }
 
     pub async fn load_async(&mut self) {
+        // TODO: remove glob, read directory asynchronously
         let mut image_futures = Vec::new();
 
-        for entry in glob("assets/*.png").expect("Failed to load images") {
+        for entry in glob("assets/*.png").expect("Failed to load textures") {
             match entry {
                 Ok(path) => {
-                    let future = self.load_image(path);
+                    let future = self.load_texture(path);
                     image_futures.push(future);
                 },
                 Err(e) => println!("{:?}", e),
@@ -74,12 +99,12 @@ impl AssetManager {
         }
 
         for (name, image) in join_all(image_futures).await {
-            self.images.insert(name, image);
+            self.textures.insert(name, image);
         }
 
         let mut sound_futures = Vec::new();
 
-        for entry in glob("assets/sounds/*.wav").expect("Failed to load images") {
+        for entry in glob("assets/sounds/*.wav").expect("Failed to load textures") {
             match entry {
                 Ok(path) => {
                     let future = self.load_sound(path);
@@ -98,28 +123,5 @@ impl AssetManager {
         let mut manager = Self::empty();
         manager.load_async().await;
         manager
-    }
-
-    pub fn add_get_placeholder(&mut self, text: &str, color: Color, size: Vec2, camera: Option<&Camera2D>) -> &Texture2D {
-        let ass_cam = Camera2D {
-            render_target: Some(render_target(size.x as u32, size.y as u32)),
-            ..Default::default()
-        };
-
-        set_camera(&ass_cam);
-
-        clear_background(color);
-
-        draw_text(text, 0., 0., 16., WHITE);
-
-        if let Some(cam) = camera {
-            set_camera(cam);
-        } else {
-            set_default_camera();
-        }
-
-        self.images.insert(text.to_string(), ass_cam.render_target.unwrap().texture.clone());
-
-        &self.images[text]
     }
 }
