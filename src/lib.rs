@@ -69,11 +69,15 @@ impl AssetManager {
     }
 
     pub fn image_to_tex(&mut self, name: &str) {
-        self.textures.insert(name.to_string(), Texture2D::from_image(&self.images[name]));
+        if !self.textures.contains_key(name) {
+            self.textures.insert(name.to_string(), Texture2D::from_image(&self.images[name]));
+        }
     }
 
     pub fn tex_to_image(&mut self, name: &str) {
-        self.images.insert(name.to_string(), self.textures[name].get_texture_data());
+        if !self.images.contains_key(name) {
+            self.images.insert(name.to_string(), self.textures[name].get_texture_data());
+        }
     }
 
     pub async fn load_texture(&self, path: std::path::PathBuf) -> (String, Texture2D) {
